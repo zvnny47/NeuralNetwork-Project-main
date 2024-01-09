@@ -11,7 +11,6 @@ from DigitRecGUI import DigitRecGUI
 from Model import Model
 import tkinter as tk
 
-
 layers = [(784, 256), (256, 64), (64, 10)]  # Example layers
 batch_size = 32
 epochs = 18
@@ -53,9 +52,9 @@ def train_model_callback():
                 digit_count[label] += 1
         #Debug
         print("Shapes before conversion:")
-        print("balanced_images:", [img.shape for img in balanced_images])
+        print("balanced_images:", [np.array(img).shape for img in balanced_images])
         print("balanced_labels:", [label for label in balanced_labels])
-        if len(set(img.shape for img in balanced_images)) != 1:
+        if len(set(np.array(img).shape for img in balanced_images)) != 1:
             print("Error: Images have inconsistent shapes.")
             return
         # Convert to NumPy arrays
@@ -73,5 +72,5 @@ def train_model_callback():
         print(f"Error during training: {e}")
 
 window = tk.Tk()
-gui = DigitRecGUI(window, predict_callback, train_model_callback)
+gui = DigitRecGUI(window, model, predict_callback, train_model_callback)
 window.mainloop()

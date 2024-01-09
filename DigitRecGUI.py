@@ -5,18 +5,18 @@ import numpy as np
 import cv2
 
 class DigitRecGUI:
-    def __init__(self, window, predict_callback,train_model_callback):
+    def __init__(self, window, model, predict_callback,train_model_callback):
         #Create Window
         self.window = window
         self.window.title('Digit Recognition')
         self.window.attributes("-fullscreen", True)
-
 
         #Create Theme
         style = ttk.Style()
         style.theme_use('clam')
 
         #Var
+        self.model = model
         self.color = 'black'
         self.points = []
         self.pen_width = 10
@@ -47,6 +47,7 @@ class DigitRecGUI:
         x2, y2 = (event.x + self.pen_width), (event.y + self.pen_width)
         self.canvas.create_oval(x1, y1, x2, y2, fill=self.color)
         self.points.append((event.x, event.y))
+        self.predict()
 
     def create_mainUI(self):
         canvas_box = tk.Frame(self.window, background='#353535')
@@ -63,6 +64,7 @@ class DigitRecGUI:
         self.lines = []
 
         digit_buttons = []
+        self.percentage_labels = []
         bottom_frame = tk.Frame(self.window, background='#707070')
         bottom_frame.pack(expand=True, fill='both')
         button_frame = tk.Frame(bottom_frame, background='#707070')
@@ -71,13 +73,17 @@ class DigitRecGUI:
         for digit in range(10):
             button = tk.Button(button_frame, text=str(digit), width=2, height=1, command=lambda d=digit: self.button_click(d),
                                bg='#DC7561', fg='black', font=('Helvetica', 15))
-            button.pack(side='left', padx=3, pady=3)
+            button.grid(row=0, column=digit, padx=3, pady=3)
             digit_buttons.append(button)
+
+            label = tk.Label(button_frame, text="--%", font=('Helvetica', 12), anchor='w', justify='left', bg='#DC7561', fg='black')
+            label.grid(row=1, column=digit, padx=3, pady=10)
+            self.percentage_labels.append(label)
 
         self.digit_buttons = digit_buttons
 
-        predict_button = tk.Button(button_frame, text="Predict", command=self.predict_wrapper, bg='#DC7561', fg='black', font=('Helvetica', 15))
-        predict_button.pack(side='left', padx=10)
+        predict_button = tk.Button(button_frame, text="Add and Clear", command=self.clear_canvas, bg='#DC7561', fg='black', font=('Helvetica', 15))
+        predict_button.grid(row=2, column=10, padx=10)
 
     def predict_wrapper(self):
         self.predict()
@@ -88,7 +94,6 @@ class DigitRecGUI:
         for point in self.points:
             draw.ellipse([point[0] - self.pen_width, point[1] - self.pen_width, point[0] + self.pen_width, point[1] + self.pen_width], fill='black')
 
-
         # Resize to 28x28
         image = image.resize((28, 28))
         
@@ -96,18 +101,20 @@ class DigitRecGUI:
         image = np.invert(np.array(image))
         
         # Thresholding and reshaping
-        img = image
-        _, img = cv2.threshold(img, 100, 255, cv2.THRESH_BINARY)
+        img = image 
         img = img.reshape(28, 28)
 
         # Save the image
         cv2.imwrite('TestImage.png', img)
 
         # Normalize and reshape for prediction
-        _,image = cv2.threshold(image, 100, 255, cv2.THRESH_BINARY)
         image = image / 255.0
         image = image.reshape(-1)
 
+        self.image = image
+        prediction = self.model.predict(self.image)
+        self.display_prediction(prediction)
+    def clear_canvas(self):
         try:
             loaded_data = np.load('data.npz')
             self.trainImages = loaded_data['images'].tolist()
@@ -115,20 +122,15 @@ class DigitRecGUI:
             print(self.trainLabels)
         except:
             print("Failed")
-        #Debug
-        for img in self.trainImages:
-            print(np.array(img).shape)
+            
         if self.current_label is not None:
-            print(image.shape)
-            self.trainImages.append(image)
+            print(self.image.shape)
+            self.trainImages.append(self.image)
             self.trainLabels.append(int(self.current_label))
             np.savez('data.npz',images = self.trainImages,labels = self.trainLabels)
 
         self.canvas.delete('all')
         self.points = []
-        self.image = image
-
-    
     def button_click(self, digit):
         for btn in self.digit_buttons:
             if btn != self.digit_buttons[digit]:
@@ -136,11 +138,29 @@ class DigitRecGUI:
                 btn['fg'] = 'black'
 
         if self.digit_buttons[digit]['fg'] == 'black':
-            self.digit_buttons[digit]['fg'] = '#39FF14'
+            self.digit_buttons[digit]['fg'] = '#83f28f'
             self.current_label = digit
-        elif self.digit_buttons[digit]['fg'] == '#39FF14':
+        elif self.digit_buttons[digit]['fg'] == '#83f28f':
             self.digit_buttons[digit]['fg'] = 'black'
             self.current_label = None
             
     def display_prediction(self, prediction):
         self.prediction_label.config(text=f"Predicted digit: {prediction}")
+
+        softmax_activation = self.model.activations[-1]
+
+        probabilities = softmax_activation.output
+        max_percentage_index = np.argmax(probabilities, axis=1)
+
+        for digit, label in zip(range(10), self.percentage_labels):
+            percentage = np.round(100 * probabilities[:, digit].max(), 2)
+            formatted_percentage = f"{percentage:.0f}%".zfill(3)
+
+            if digit == max_percentage_index[0]:  # Highlight the highest percentage in green
+                label.config(text=f"{formatted_percentage}", fg='#83f28f')
+            else:
+                label.config(text=f"{formatted_percentage}", fg='black')
+
+
+
+
